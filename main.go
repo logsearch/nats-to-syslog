@@ -144,7 +144,20 @@ func connectToNATS(natsURI string, mutualTLSKey string, mutualTLSCert string) *n
 	}
 
 	// Handle no mutual TLS key/cert please
-	natsClient, err := nats.Connect(natsURI, nats.Secure(tlsConfig))
+	// ToDo: handle no mutual TLS key/cert
+	natsClient, err := nats.Connect(natsURI,
+		nats.Secure(tlsConfig),
+		nats.DisconnectHandler(func(nc *nats.Conn) {
+			logger.Info("Got disconnected!", lager.Data{"message": nc.LastError()})
+			stop <- true
+		}),
+		nats.ReconnectHandler(func(nc *nats.Conn) {
+			logger.Info("Got reconnected to %v!\n", lager.Data{"message": nc.ConnectedUrl()})
+		}),
+		nats.ClosedHandler(func(nc *nats.Conn) {
+			logger.Info("Connection closed", lager.Data{"message": nc.LastError()})
+			stop <- true
+		}))
 	handleError(err, "connecting to nats")
 	logger.Info("connected-to-nats", lager.Data{"uri": natsURI})
 	return natsClient
